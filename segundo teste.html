@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Escape do Castelo — Masmorra Antiga (Versão 10 Níveis - Visual Aprimorado)</title>
+<style>
+  :root{ --accent:#d6b400; --panel-bg: rgba(15,21,18,0.92); }
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:#020617;color:#e9e6e0;overflow:hidden}
+
+/* --- Fundo animado AO REDOR do canvas (opção 2) --- */
+body {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:36px;
+  box-sizing:border-box;
+  background: linear-gradient(180deg,#020617 0%, #041022 60%, #08121a 100%);
+}
+
+/* stars layer (subtle, behind everything) */
+.stars {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: transparent;
+  overflow: hidden;
+}
+
+/* moon (decorative at side) */
+.moon {
+  position: fixed;
+  top: 40px;
+  left: 48px;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fffdf0 0%, #d7d0b0 60%, rgba(200,190,150,0.0) 100%);
+  box-shadow: 0 0 28px rgba(255,240,200,0.12), 0 0 80px rgba(150,180,255,0.02) inset;
+  z-index: 1;
+  opacity: 0.95;
+  mix-blend-mode: screen;
+}
+
+/* moving clouds (soft, always around edges) */
+.cloud {
+  position: fixed;
+  top: 40px;
+  width: 560px;
+  height: 160px;
+  background: radial-gradient(ellipse at 20% 50%, rgba(255,255,255,0.12), rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.02) 60%, transparent 70%);
+  filter: blur(8px);
+  border-radius: 120px;
+  z-index: 1;
+  opacity: 0.20;
+  pointer-events: none;
+  animation: cloudMove linear infinite;
+}
+.cloud.c1 { left: -280px; top: 20px; animation-duration: 80s; animation-delay: 0s; }
+.cloud.c2 { left: calc(50% - 600px); top: 90px; animation-duration: 110s; animation-delay: 12s; }
+.cloud.c3 { left: -450px; top: 160px; animation-duration: 140s; animation-delay: 26s; }
+@keyframes cloudMove { from { transform: translateX(0) } to { transform: translateX(160vw) } }
+
+/* twinkling particles (stars) */
+.star {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  opacity: 0;
+  animation: twinkle 3.5s infinite ease-in-out;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.12));
+}
+@keyframes twinkle { 0% { opacity: 0 } 50% { opacity: 1 } 100% { opacity: 0 } }
+
+/* --- Container para o jogo (mantém canvas opaco no centro) --- */
+.game-container {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap:12px;
+  max-width: calc(100vw - 72px);
+  max-height: calc(100vh - 72px);
+}
+
+/* header / panels */
+.wrap { display:flex;flex-direction:column;align-items:center;gap:10px; }
+h1{ margin:8px 0 4px;font-size:28px;color:var(--accent);text-shadow:0 6px 20px rgba(214,180,0,0.06);letter-spacing:1px; z-index:6}
+#topbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;z-index:6}
+.panel{background:var(--panel-bg);padding:8px 12px;border-radius:10px;box-shadow:0 8px 22px rgba(0,0,0,0.6);font-size:14px}
+button{background:#3b7a55;border:none;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer;z-index:6}
+
+/* canvas wrapper - keeps canvas centered and visually distinct */
+.canvas-wrap{
+  background: linear-gradient(180deg, rgba(10,14,16,0.95), rgba(2,6,8,0.98));
+  padding: 18px;
+  border-radius: 14px;
+  box-shadow:
+    0 18px 50px rgba(2,6,8,0.8),
+    0 0 0 2px rgba(214,180,0,0.035) inset,
+    0 0 22px rgba(100,180,255,0.02) inset;
+  z-index:6;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+/* canvas style */
+#gameCanvas{
+  display:block;
+  border-radius:8px;
+  background: #071014; /* keeps game area visually separate */
+  box-shadow: 0 8px 30px rgba(0,0,0,0.8);
+  image-rendering: pixelated;
+}
+
+/* mobile controls */
+.mobile-controls {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: 70px 70px 70px;
+  grid-template-rows: 70px 70px;
+  gap: 10px;
+  z-index: 9;
+}
+.mobile-btn {
+  background: radial-gradient(circle, rgba(255,255,255,0.03), rgba(0,0,0,0.4));
+  border: 2px solid rgba(214,180,0,0.12);
+  border-radius: 50%;
+  width: 70px;
+  height: 70px;
+  color: var(--accent);
+  font-size: 24px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action: none;
+}
+.mobile-btn:active { transform: scale(0.94); background: rgba(214,180,0,0.06); color:#071014; }
+
+/* footer */
+footer { margin-top:8px; color:#9ea79e; font-size:13px; z-index:6 }
+
+/* responsive tweaks */
+@media (max-width:720px){
+  h1{ font-size:20px }
+  .mobile-controls { transform: translateX(-50%) scale(0.94) }
+}
+</style>
+</head>
+<body>
+  <!-- Animated decorative background elements (around the game area) -->
+  <div class="stars" id="starsLayer"></div>
+  <div class="moon" aria-hidden="true"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+
+  <!-- Game UI -->
+  <div class="game-container">
+    <div class="wrap">
+      <h1>Escape do Castelo — Masmorra Antiga</h1>
+      <div id="topbar">
+        <div class="panel">Nível: <span id="level">1</span></div>
+        <div class="panel">Monstros: <span id="moncount">0</span></div>
+        <div class="panel">Vidas: <span id="lives">5</span></div>
+        <button id="restart">Reiniciar Nível</button>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="gameCanvas" width="1024" height="640"></canvas>
+      </div>
+
+      <footer>Versão com 10 níveis — visual noturno tecnológico ao redor.</footer>
+    </div>
+  </div>
+
+  <!-- Mobile controls -->
+  <div class="mobile-controls" id="mobileControls" aria-hidden="false">
+    <div class="mobile-btn" id="btnUp">⬆</div>
+    <div class="mobile-btn" id="btnLeft">⬅</div>
+    <div class="mobile-btn" id="btnDown">⬇</div>
+    <div class="mobile-btn" id="btnRight">➡</div>
+  </div>
+
+  <!-- Audio -->
+  <audio id="bgMusic" loop preload="auto" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_07f13b7d82.mp3?filename=dark-castle-ambient-110652.mp3"></audio>
+  <audio id="stepSound" preload="auto" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_fec3e79c90.mp3?filename=footstep-wood-110657.mp3"></audio>
+  <audio id="trapSound" preload="auto" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_3b7e0b2f6f.mp3?filename=trap-snap-110659.mp3"></audio>
+  <audio id="growlSound" preload="auto" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_52a2b3024e.mp3?filename=zombie-growl-110658.mp3"></audio>
+
+<script>
+/* -------------------------
+   Decorative script: stars
+   ------------------------- */
+(function createStars(){
+  const layer = document.getElementById('starsLayer');
+  const w = window.innerWidth, h = window.innerHeight;
+  const count = 120;
+  for(let i=0;i<count;i++){
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random()*2.5 + 0.6;
+    s.style.width = size + 'px';
+    s.style.height = size + 'px';
+    s.style.left = (Math.random()*100) + '%';
+    s.style.top = (Math.random()*100) + '%';
+    s.style.animationDuration = (2 + Math.random()*4) + 's';
+    s.style.animationDelay = (Math.random()*4) + 's';
+    layer.appendChild(s);
+  }
+})();
+
+/* -------------------------
+   Seu código do jogo (integrado)
+   - Mantive a lógica original.
+   - Melhorei as funções de desenho do piso e das paredes para o visual aprimorado.
+   ------------------------- */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const levelLabel = document.getElementById('level');
+const monLabel = document.getElementById('moncount');
+const livesLabel = document.getElementById('lives');
+const restartBtn = document.getElementById('restart');
+const bgMusic = document.getElementById('bgMusic');
+const stepSound = document.getElementById('stepSound');
+const trapSound = document.getElementById('trapSound');
+const growlSound = document.getElementById('growlSound');
+
+let TILE = 32; // recalculated per level
+let cols = 32, rows = 20;
+let maze = []; // 0=wall,1=floor,2=door,3=trap-hidden,4=trap-revealed
+let currentLevel = 1, MAX_LEVEL = 10;
+let lives = 5;
+let player = { px:1, py:1, spawnX:1, spawnY:1, speed:0.12 };
+let monsters = [];
+let door = { x:0, y:0 };
+let keys = {};
+let lastHit = 0;
+
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function dist(x1,y1,x2,y2){ return Math.hypot(x1-x2,y1-y2); }
+
+// Responsive tile sizing
+function setSizeForLevel(level){ cols = 25 + level*2; if(cols%2===0) cols++; rows = Math.max(16, Math.floor(cols*0.62)); if(rows%2===0) rows++; const maxWidth = Math.min(window.innerWidth - 120, 1400); const maxHeight = Math.min(window.innerHeight - 220, 1000); TILE = Math.floor(Math.min(Math.floor(maxWidth / cols), Math.floor(maxHeight / rows))); if(TILE < 12) TILE = 12; canvas.width = cols * TILE; canvas.height = rows * TILE; }
+
+// Maze: recursive backtracker
+function generateMaze(){ maze = Array(rows).fill().map(()=>Array(cols).fill(0)); function inB(r,c){ return r>0 && r<rows-1 && c>0 && c<cols-1; } function carve(r,c){ maze[r][c]=1; const dirs=[[0,-2],[0,2],[-2,0],[2,0]]; shuffle(dirs); for(const d of dirs){ const nr=r+d[0], nc=c+d[1]; if(inB(nr,nc) && maze[nr][nc]===0){ maze[r+d[0]/2][c+d[1]/2]=1; carve(nr,nc); } } } carve(1,1); // add extra openings
+  const extras = Math.floor((cols*rows)/60); for(let i=0;i<extras;i++){ const rr=randInt(1,rows-2), cc=randInt(1,cols-2); if(maze[rr][cc]===0) maze[rr][cc]=1; } // scatter hidden traps
+  const trapCount = Math.min( Math.floor((cols*rows)/60), 10 + currentLevel ); for(let i=0;i<trapCount;i++){ let tr,tc,tries=0; do{ tr=randInt(1,rows-2); tc=randInt(1,cols-2); tries++; }while((maze[tr][tc]!==1 || (tr===1&&tc===1)) && tries<200); if(tries<200) maze[tr][tc]=3; }
+}
+
+function placePlayerAndDoor(){ outer: for(let r=1;r<rows-1;r++){ for(let c=1;c<cols-1;c++){ if(maze[r][c]===1){ player.px = player.spawnX = c; player.py = player.spawnY = r; break outer; } } } outer2: for(let r=rows-2;r>=1;r--){ for(let c=cols-2;c>=1;c--){ if(maze[r][c]===1){ door.x=c; door.y=r; break outer2; } } } maze[door.y][door.x]=2; }
+
+function randomDir(){ const d=[[-1,0],[1,0],[0,-1],[0,1]]; return d[Math.floor(Math.random()*4)]; }
+
+function spawnMonsters(level){ monsters = []; const base = 3 + Math.floor(level*1.3); const extra = Math.min(30, Math.floor(level*2)); const count = Math.min(30, base + extra); const types = ['wander','patrol','chase']; for(let i=0;i<count;i++){ let mx,my,tries=0; do{ mx=randInt(1,cols-2); my=randInt(1,rows-2); tries++; }while((maze[my][mx]!==1 || dist(mx,my,player.px,player.py) < 6) && tries<800); const type = types[Math.floor(Math.random()*types.length)]; monsters.push({ x:mx, y:my, px:mx, py:my, type:type, dir: randomDir(), speed: 0.02 + Math.random()*0.05 + level*0.008, anim: Math.random()*10 }); } }
+
+function canWalk(cx,cy){ if(cx<0||cy<0||cx>=cols||cy>=rows) return false; return maze[cy][cx] !== 0; }
+
+function revealTrapAt(x,y){ if(maze[y][x]===3){ maze[y][x]=4; try{ trapSound.currentTime = 0; trapSound.play(); }catch(e){} return true; } return false; }
+
+function handlePlayerHit(){ const now = performance.now(); if(now - lastHit < 900) return; lastHit = now; lives--; livesLabel.textContent = lives; player.px = player.spawnX; player.py = player.spawnY; try{ growlSound.currentTime = 0; growlSound.play(); }catch(e){} if(lives <= 0){ setTimeout(()=>{ alert('Você morreu! Reiniciando do nível 1.'); lives = Math.max(3,5); startLevel(1); }, 80); } }
+
+// AI
+function updateMonsters(delta){ for(const m of monsters){ m.anim += delta*0.1; if(m.wait > 0){ m.wait -= delta; continue; } if(m.type==='wander'){ if(Math.random() < 0.03) m.dir = randomDir(); const tx = m.x + m.dir[0], ty = m.y + m.dir[1]; if(canWalk(tx,ty)){ m.px += (tx - m.px) * Math.min(1, m.speed*delta*8); m.py += (ty - m.py) * Math.min(1, m.speed*delta*8); if(Math.abs(m.px - tx) < 0.12 && Math.abs(m.py - ty) < 0.12){ m.x = Math.round(m.px); m.y = Math.round(m.py); } } else m.dir = randomDir(); } else if(m.type==='patrol'){ const nx = m.x + m.dir[0], ny = m.y + m.dir[1]; if(canWalk(nx,ny)){ m.px += (nx - m.px) * Math.min(1, m.speed*delta*8); m.py += (ny - m.py) * Math.min(1, m.speed*delta*8); if(Math.abs(m.px - nx) < 0.12 && Math.abs(m.py - ny) < 0.12){ m.x = nx; m.y = ny; } } else m.dir = randomDir(); } else if(m.type==='chase'){ const neigh = [[-1,0],[1,0],[0,-1],[0,1]]; let best=null,bd=1e9; for(const n of neigh){ const nx=m.x+n[0], ny=m.y+n[1]; if(!canWalk(nx,ny)) continue; const d=dist(nx,ny,player.px,player.py); if(d<bd){ bd=d; best=n; } } if(best){ const nx=m.x+best[0], ny=m.y+best[1]; m.px += (nx - m.px) * Math.min(1, m.speed*delta*10); m.py += (ny - m.py) * Math.min(1, m.speed*delta*10); if(Math.abs(m.px - nx) < 0.12 && Math.abs(m.py - ny) < 0.12){ m.x = nx; m.y = ny; } } } if(Math.hypot(m.px - player.px, m.py - player.py) < 0.55) handlePlayerHit(); } }
+
+// Player
+function updatePlayer(delta){ let dx=0, dy=0; if(keys['arrowup']||keys['w']) dy=-1; if(keys['arrowdown']||keys['s']) dy=1; if(keys['arrowleft']||keys['a']) dx=-1; if(keys['arrowright']||keys['d']) dx=1; if(dx!==0 && dy!==0){ dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; } if(dx===0 && dy===0) return; const speed = player.speed * delta; const targetX = player.px + dx*speed, targetY = player.py + dy*speed; const tx = Math.round(targetX), ty = Math.round(targetY); if(canWalk(tx,ty)){ player.px = targetX; player.py = targetY; // step sound occasionally
+    if(stepSound && stepSound.paused===false){ /* avoid auto-playing floods */ }
+    // stepping on trap?
+    if(revealTrapAt(Math.round(player.px), Math.round(player.py))){ // trap revealed, damage
+      handlePlayerHit();
+    }
+  }
+  // reached door?
+  const pxCell = Math.round(player.px), pyCell = Math.round(player.py);
+  if(pxCell === door.x && pyCell === door.y){ if(currentLevel >= MAX_LEVEL){ setTimeout(()=>{ alert('Parabéns — você escapou do castelo antigo!'); startLevel(1); }, 80); } else { setTimeout(()=>{ alert('Porta encontrada — nível seguinte!'); startLevel(currentLevel+1); }, 80); } }
+}
+
+/* -------------------------
+   Visual improvements:
+   - drawStoneBlock and drawFloor updated for metallic/tech look
+   - subtle floor noise and wall specular highlights
+   ------------------------- */
+
+function draw(){ ctx.clearRect(0,0,canvas.width,canvas.height);
+  // ambient background inside canvas (slightly gradient)
+  const bg = ctx.createLinearGradient(0,0,0,canvas.height);
+  bg.addColorStop(0,'#061018');
+  bg.addColorStop(1,'#0b1012');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // floor and walls
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const x=c*TILE, y=r*TILE, v=maze[r][c];
+      if(v===0){ // wall: improved stone / metallic block
+        drawStoneBlock(x,y,TILE,TILE,c,r);
+      } else if(v===1){ // floor: textured, subtle metallic sheen
+        drawFloor(x,y,TILE,TILE,c,r);
+      } else if(v===2){ // door
+        drawFloor(x,y,TILE,TILE,c,r);
+        // door overlay with subtle glow
+        ctx.fillStyle = '#19120f'; ctx.fillRect(x,y,TILE,TILE);
+        ctx.fillStyle = '#d6b400'; ctx.fillRect(x + TILE*0.26, y + TILE*0.16, TILE*0.48, TILE*0.68);
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x + TILE*0.26, y + TILE*0.12, TILE*0.48, TILE*0.08);
+        ctx.globalAlpha = 1;
+      } else if(v===3){
+        drawFloor(x,y,TILE,TILE,c,r);
+      } else if(v===4){
+        drawFloor(x,y,TILE,TILE,c,r);
+        ctx.fillStyle = 'rgba(255,80,70,0.95)'; ctx.fillRect(x+TILE*0.18,y+TILE*0.18,TILE*0.64,TILE*0.64);
+      }
+    }
+  }
+
+  // subtle grid highlight for "tech" feel around the maze edges (inside canvas)
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.strokeStyle = '#4fb7ff';
+  ctx.lineWidth = 1;
+  for(let gx=0; gx<canvas.width; gx += Math.max(64, TILE*4)){
+    ctx.beginPath();
+    ctx.moveTo(gx,0); ctx.lineTo(gx, canvas.height); ctx.stroke();
+  }
+  for(let gy=0; gy<canvas.height; gy += Math.max(64, TILE*4)){
+    ctx.beginPath();
+    ctx.moveTo(0,gy); ctx.lineTo(canvas.width, gy); ctx.stroke();
+  }
+  ctx.restore();
+
+  // monsters
+  for(const m of monsters){ const mx = m.px * TILE + TILE/2, my = m.py * TILE + TILE/2; drawMonster(mx,my,m); }
+
+  // player (pixel art)
+  const px = player.px * TILE + TILE/2, py = player.py * TILE + TILE/2; drawPlayerPixel(px,py);
+
+  // vignette / rim light
+  drawVignette();
+}
+
+function drawStoneBlock(x,y,w,h,c,r){
+  // slightly metallic block with inner shadow and specular highlight
+  // base
+  const grad = ctx.createLinearGradient(x,y,x+w,y+h);
+  grad.addColorStop(0,'#2f2b2a');
+  grad.addColorStop(1,'#1f1c1b');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x,y,w,h);
+
+  // inset bevel (simulate carved stone / metal plate)
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillRect(x+2,y+Math.floor(h*0.5), w-4, Math.max(1,Math.floor(h*0.06)));
+  ctx.restore();
+
+  // thin grooves
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = Math.max(1, w/80);
+  ctx.beginPath();
+  ctx.moveTo(x+Math.floor(w*0.12), y+Math.floor(h*0.18));
+  ctx.lineTo(x+Math.floor(w*0.88), y+Math.floor(h*0.18));
+  ctx.stroke();
+
+  // specular highlight
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = '#9fd8ff';
+  ctx.fillRect(x + Math.floor(w*0.06), y + Math.floor(h*0.06), Math.max(1, Math.floor(w*0.34)), Math.max(1, Math.floor(h*0.08)));
+  ctx.globalAlpha = 1;
+
+  // occasional crack / wear
+  if(((c*r)&11)===0){
+    ctx.fillStyle='rgba(255,255,255,0.02)';
+    ctx.fillRect(x+Math.floor(w*0.08),y+Math.floor(h*0.12),Math.max(1,Math.floor(w*0.06)),Math.max(1,Math.floor(h*0.02)));
+  }
+
+  // subtle outer glow for special "tech" feel near some blocks
+  if(((c+r)&19)===0){
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.fillStyle = '#4fb7ff';
+    ctx.fillRect(x+2,y+2,w-4,h-4);
+    ctx.restore();
+  }
+}
+
+function drawFloor(x,y,w,h,c,r){
+  // base dark textured floor with metallic sheen
+  ctx.fillStyle = '#0e1213';
+  ctx.fillRect(x,y,w,h);
+
+  // noise lines / scuffs
+  if(((c+r)&3)===0){
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    ctx.fillRect(x+Math.floor(w*0.12),y+Math.floor(h*0.12),Math.max(1,Math.floor(w*0.06)),Math.max(1,Math.floor(h*0.06)));
+  }
+
+  // diagonal micro-stripes for subtle texture (tech-metal)
+  ctx.save();
+  ctx.globalAlpha = 0.07;
+  ctx.strokeStyle = '#1f2b33';
+  ctx.lineWidth = Math.max(1, w/120);
+  ctx.beginPath();
+  const lines = 2;
+  for(let i=0;i<lines;i++){
+    ctx.moveTo(x - h + i*10, y + i*10);
+    ctx.lineTo(x + w + h, y - h + i*10);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // soft central sheen (simulating slight reflection)
+  const g = ctx.createRadialGradient(x + w*0.5, y + h*0.4, 2, x + w*0.5, y + h*0.4, Math.max(w,h));
+  g.addColorStop(0, 'rgba(255,255,255,0.02)');
+  g.addColorStop(0.6, 'rgba(255,255,255,0.00)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+
+  // small moss/greenish tint occasionally (keeps medieval feel)
+  if(((c*r)&7)===0){
+    ctx.fillStyle='rgba(50,90,40,0.03)';
+    ctx.fillRect(x+2,y+2,w-4,h-4);
+  }
+}
+
+function drawVignette(){
+  // subtle vignette and inner rim glow
+  const g = ctx.createRadialGradient(canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)*0.2, canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)*0.8);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // inner rim subtle bluish light
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.strokeStyle = '#4fb7ff';
+  ctx.lineWidth = Math.max(2, TILE/6);
+  ctx.strokeRect(2,2,canvas.width-4,canvas.height-4);
+  ctx.restore();
+}
+
+/* Pixel player renderer (mantive) */
+function drawPlayerPixel(cx,cy){ const scale = Math.max(1, Math.floor(TILE/12)); const size = 8; const pxSize = scale; const startX = Math.round(cx - (size*pxSize)/2); const startY = Math.round(cy - (size*pxSize)/2) + Math.round(TILE*0.06);
+  const sprite = [
+    [0,0,2,2,2,2,0,0],
+    [0,2,2,1,1,2,2,0],
+    [2,2,1,1,1,1,2,2],
+    [0,3,3,3,3,3,3,0],
+    [0,3,3,3,3,3,3,0],
+    [0,0,3,3,3,3,0,0],
+    [0,0,4,0,0,4,0,0],
+    [0,0,4,0,0,4,0,0]
+  ];
+  for(let ry=0; ry<size; ry++){
+    for(let rx=0; rx<size; rx++){
+      const v = sprite[ry][rx]; if(v===0) continue; let col='#000';
+      if(v===1) col='#f2d3bd';
+      else if(v===2) col='#23120b';
+      else if(v===3) col='#7b2d4a';
+      else if(v===4) col='rgba(0,0,0,0.45)';
+      ctx.fillStyle = col;
+      ctx.fillRect(startX + rx*pxSize, startY + ry*pxSize, pxSize, pxSize);
+    }
+  }
+}
+
+/* drawMonster mantido (seu original) */
+function drawMonster(cx,cy,m){ ctx.save(); ctx.translate(cx,cy);
+  const wob = Math.sin(m.anim*0.6)*2;
+  if(m.type==='wander'){ ctx.beginPath(); ctx.ellipse(0 + wob, -TILE*0.02, TILE*0.28, TILE*0.32,0,0,Math.PI*2); ctx.fillStyle='#6b4b2b'; ctx.fill(); ctx.fillStyle='#1f0f05'; ctx.fillRect(-TILE*0.12,-TILE*0.02,TILE*0.24,TILE*0.08); }
+  else if(m.type==='patrol'){ ctx.beginPath(); ctx.arc(0 + wob, -TILE*0.05, TILE*0.28,0,Math.PI*2); ctx.fillStyle='#4a9bb4'; ctx.fill(); ctx.fillStyle='#062f3d'; ctx.fillRect(-TILE*0.09,-TILE*0.15,TILE*0.18,TILE*0.12); }
+  else { ctx.beginPath(); ctx.moveTo(-TILE*0.28,TILE*0.12); ctx.lineTo(0,-TILE*0.22); ctx.lineTo(TILE*0.28,TILE*0.12); ctx.closePath(); ctx.fillStyle='#8c1f2a'; ctx.fill(); ctx.fillStyle='#2e0708'; ctx.fillRect(-TILE*0.08,-TILE*0.02,TILE*0.16,TILE*0.12); }
+  ctx.beginPath(); ctx.arc(0 - TILE*0.06, -TILE*0.06, Math.max(1, TILE*0.04), 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); ctx.beginPath(); ctx.arc(0 - TILE*0.06, -TILE*0.06, Math.max(1, TILE*0.02), 0, Math.PI*2); ctx.fillStyle='#000'; ctx.fill(); ctx.restore(); }
+
+/* Main loop */
+let last = performance.now();
+function loop(){ const now = performance.now(); const delta = (now - last)/16.666; last = now; updatePlayer(delta); updateMonsters(delta); draw(); monLabel.textContent = monsters.length; levelLabel.textContent = currentLevel; livesLabel.textContent = lives; requestAnimationFrame(loop); }
+
+function startLevel(lvl){ currentLevel = lvl; setSizeForLevel(lvl); generateMaze(); placePlayerAndDoor(); player.spawnX = Math.round(player.px); player.spawnY = Math.round(player.py); player.speed = 0.12 + lvl*0.012; spawnMonsters(lvl); // heal a bit each level
+  lives = Math.min(9, lives + 1); livesLabel.textContent = lives; }
+
+restartBtn.addEventListener('click', ()=> startLevel(currentLevel));
+window.addEventListener('keydown', e=>{ keys[e.key.toLowerCase()] = true; if(e.key === ' '){ try{ if(bgMusic.paused) bgMusic.play(); else bgMusic.pause(); }catch(e){} } });
+window.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
+canvas.addEventListener('click', ()=>{ try{ if(bgMusic.paused) bgMusic.play(); }catch(e){} try{ stepSound.currentTime = 0; }catch(e){} });
+window.addEventListener('resize', ()=>{ setSizeForLevel(currentLevel); draw(); });
+
+// safety for audio errors
+[bgMusic,stepSound,trapSound,growlSound].forEach(a=>a.addEventListener('error', ()=>{}));
+
+// initial
+startLevel(1); loop();
+
+/* -------------------------
+   Mobile control wiring (touch)
+   ------------------------- */
+const btnUp = document.getElementById('btnUp');
+const btnDown = document.getElementById('btnDown');
+const btnLeft = document.getElementById('btnLeft');
+const btnRight = document.getElementById('btnRight');
+
+function sendKey(key, down){
+  const ev = new KeyboardEvent(down ? 'keydown' : 'keyup', { key });
+  window.dispatchEvent(ev);
+}
+
+[['btnUp','w'],['btnDown','s'],['btnLeft','a'],['btnRight','d']].forEach(pair=>{
+  const el = document.getElementById(pair[0]);
+  if(!el) return;
+  el.addEventListener('touchstart', e=>{ e.preventDefault(); sendKey(pair[1], true); }, {passive:false});
+  el.addEventListener('mousedown', e=>{ e.preventDefault(); sendKey(pair[1], true); });
+  const endFn = e=>{ e.preventDefault(); sendKey(pair[1], false); };
+  el.addEventListener('touchend', endFn, {passive:false});
+  el.addEventListener('mouseup', endFn);
+  el.addEventListener('mouseleave', endFn);
+});
+
+/* End of script */
+</script>
+</body>
+</html>
